@@ -83,7 +83,7 @@ resource "aws_key_pair" "Public-key" {
 
   provisioner "local-exec" {
     command = <<-EOT
-    echo "${tls_private_key.RSA-key.private_key_pem}" > ${PWD}/Bezogia-api-stg.pem
+    echo "${tls_private_key.RSA-key.private_key_pem}" > Bezogia-api-stg.pem"
     EOT
   }
 }
@@ -128,4 +128,44 @@ resource "aws_security_group" "Ec2_sg" {
 resource "aws_instance" "Bezogia-Api-Stg" {
   instance_type = "t3.large"
   security_groups = [aws_security_group.Ec2_sg.name]
+  ami = ""
+  subnet_id = aws_subnet.Public-Subnet-1.id
+  associate_public_ip_address = false
+  
+  tags = {
+    Name = "Bezogia-Api-Master-Stg"
+  }
+
+  root_block_device {
+    volume_size = 100
+    volume_type = "gp3"
+    delete_on_termination = false
+    tags = {
+      Name = "Bezogia-Stg-block"
+    }
+  }
+
+  user_data = <<-EOF
+  #!/bin/bash
+  yum install httpd -y
+  systemctl start httpd
+  systemctl enable httpd
+  EOF 
+
+  provisioner "local-exec" {
+    command = "echo Instance is created"
+  }
+
+  }
+
+  resource "aws_eip" "Elastic-IP-Master" {
+    instance = aws_instance.Bezogia-Api-Stg.id
+
+    tags = {
+      Name = "Api-Stg-EIP"
+    }
+  }
+
+  output "Api-Elastic-Ip" {
+    value = aws_eip.Elastic-IP-Master.public_ip
   }
