@@ -1,5 +1,5 @@
 provider "aws" {
-    region = "eu-north-1"
+    region = "eu-central-1"
 }
 
 resource "aws_vpc" "BezogiaStgVpc" {
@@ -21,6 +21,7 @@ resource "aws_internet_gateway" "IGWBezogiaStgVpc" {
 resource "aws_subnet" "Public-Subnet-1" {
   vpc_id = aws_vpc.BezogiaStgVpc.id
   cidr_block = "15.0.0.0/20"
+  availability_zone = "eu-central-1c"
   map_public_ip_on_launch = true
   tags = {
     Name = "Public-Subnet-1"
@@ -30,7 +31,7 @@ resource "aws_subnet" "Public-Subnet-1" {
 resource "aws_subnet" "Private-Subnet-1" {
   vpc_id = aws_vpc.BezogiaStgVpc.id
   cidr_block = "15.0.16.0/20"
-
+  availability_zone = "eu-central-1c"
   tags = {
     Name = "Private-Subnet-1"
   }
@@ -57,11 +58,6 @@ resource "aws_route_table_association" "Public-Routetable-Association" {
 
 resource "aws_route_table" "Private-Route-Table" {
   vpc_id = aws_vpc.BezogiaStgVpc.id
-
-  route {
-    cidr_block = "15.0.0.0/16"
-  }
-
   tags = {
     Name = "Private-Route-Table"
   }
@@ -83,7 +79,7 @@ resource "aws_key_pair" "Public-key" {
 
   provisioner "local-exec" {
     command = <<-EOT
-    echo "${tls_private_key.RSA-key.private_key_pem}" > Bezogia-api-stg.pem"
+    echo "${tls_private_key.RSA-key.private_key_pem}" > Bezogia-api-stg.pem
     EOT
   }
 }
@@ -127,8 +123,8 @@ resource "aws_security_group" "Ec2_sg" {
 
 resource "aws_instance" "Bezogia-Api-Stg" {
   instance_type = "t3.large"
-  security_groups = [aws_security_group.Ec2_sg.name]
-  ami = ""
+  security_groups = [aws_security_group.Ec2_sg.id]
+  ami = "ami-09222279fcca5c53d"
   subnet_id = aws_subnet.Public-Subnet-1.id
   associate_public_ip_address = false
   
