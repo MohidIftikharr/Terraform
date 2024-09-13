@@ -63,7 +63,31 @@ resource "aws_route_table" "Private-Route-Table" {
   }
 }
 
-resource "aws_route_table_association" "Private-Routetable-association" {
+variable "key_names" {
+  default = ["Bezogia-Stg-Api","Bezogia-Stg-GServer"]
+}
+
+resource "tls_private_key" "keys" {
+  count = length(var.key_names)
+  algorithm = "RSA"
+  rsa_bits = 4096
+}
+
+resource "aws_key_pair" "Public-key" {
+  count = length(var.key_names)
+  key_name = var.key_names[count.index]
+  public_key = tls_private_key.keys[count.index].public_key_openssh
+
+  provisioner "local-exec" {
+    command = <<-EOT
+    echo "${tls_private_key.keys[count.index].private_key_pem}" > ${var.key_names[count.index]}.pem
+    chmod 0400 ${var.key_names[count.index]}.pem
+    EOT
+  }
+
+}
+
+/*resource "aws_route_table_association" "Private-Routetable-association" {
   subnet_id = aws_subnet.Private-Subnet-1.id
   route_table_id = aws_route_table.Private-Route-Table.id
 }  
@@ -82,7 +106,7 @@ resource "aws_key_pair" "Public-key" {
     echo "${tls_private_key.RSA-key.private_key_pem}" > Bezogia-api-stg.pem
     EOT
   }
-}
+}*/
 
 resource "aws_security_group" "Ec2_sg" {
   vpc_id = aws_vpc.BezogiaStgVpc.id
@@ -127,6 +151,7 @@ resource "aws_instance" "Bezogia-Api-Stg" {
   ami = "ami-09222279fcca5c53d"
   subnet_id = aws_subnet.Public-Subnet-1.id
   associate_public_ip_address = false
+  key_name = aws_key_pair.Public-key[0].key_name
   
   tags = {
     Name = "Bezogia-Api-Master-Stg"
@@ -135,7 +160,7 @@ resource "aws_instance" "Bezogia-Api-Stg" {
   root_block_device {
     volume_size = 100
     volume_type = "gp3"
-    delete_on_termination = false
+    delete_on_termination = true
     tags = {
       Name = "Bezogia-Stg-block"
     }
@@ -143,9 +168,10 @@ resource "aws_instance" "Bezogia-Api-Stg" {
 
   user_data = <<-EOF
   #!/bin/bash
-  yum install httpd -y
-  systemctl start httpd
-  systemctl enable httpd
+  curl -sSLO https://dev.mysql.com/get/mysql80-community-release-el7-5.noarch.rpm
+  sudo rpm -ivh mysql57-community-release-el7-9.noarch.rpm
+  sudo yum install mysql-server
+  sudo systemctl start mysqld
   EOF 
 
   provisioner "local-exec" {
@@ -165,3 +191,44 @@ resource "aws_instance" "Bezogia-Api-Stg" {
   output "Api-Elastic-Ip" {
     value = aws_eip.Elastic-IP-Master.public_ip
   }
+
+
+
+  resource "aws_instance" "Bezogia-Stg-GServer" {
+    instance_type = "t3.large"
+    subnet_id = aws_subnet.Public-Subnet-1.id
+    security_groups = [aws_security_group.Ec2_sg.id]
+    ami = "ami-0c3539193b5459b26"
+    key_name = aws_key_pair.Public-key[1].key_name
+    associate_public_ip_address = false
+    
+    root_block_device {
+      volume_size = 100
+      volume_type = "gp3"
+      delete_on_termination = true
+      tags = {
+        Name = "Bezogia-Stg-GServer-Vol"
+      }
+    }
+
+    tags = {
+      Name = "Bezogia-Stg-GServer"
+    }
+
+    provisioner "local-exec" {
+      command = "echo Instance For Game Server Created"
+    }
+  }
+
+  resource "aws_eip" "Bezogia-EIP-GS" {
+    instance = aws_instance.Bezogia-Stg-GServer.id
+
+    tags = {
+      Name = "Bezogia-Stg-GServer"
+    }
+  }
+
+  output "EIP-GServer-Out" {
+    value = aws_eip.Bezogia-EIP-GS.public_ip
+  }
+
